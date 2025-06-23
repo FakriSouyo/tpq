@@ -1081,7 +1081,7 @@ Wassalamu'alaikum Wr. Wb.`
                           </TableCell>
                         </TableRow>
                       ))}
-                      <TableRow className="font-bold">
+                      <TableRow key="total" className="font-bold">
                         <TableCell>Total</TableCell>
                         <TableCell className="text-right">
                           Rp {pembayaran?.total_biaya.toLocaleString()}

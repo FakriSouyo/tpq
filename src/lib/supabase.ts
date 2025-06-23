@@ -15,8 +15,5 @@ if (!supabaseUrl || !supabaseKey) {
   throw new Error('Supabase URL and Anon Key are required')
 }
 
-console.log('Supabase URL:', supabaseUrl)
-// Don't log the full key for security, just the first few characters
-console.log('Supabase Key (first 5 chars):', supabaseKey.substring(0, 5))
 
 export const supabase = createClient(supabaseUrl, supabaseKey) 
