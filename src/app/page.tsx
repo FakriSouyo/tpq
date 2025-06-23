@@ -31,7 +31,6 @@ interface FormData {
   jumlahSaudara: string
   golonganDarah: string
   penyakitPernah: string
-  asalSekolah: string
 
   // Biodata Ayah
   namaAyah: string
@@ -94,7 +93,6 @@ export default function PendaftaranPage() {
     jumlahSaudara: "",
     golonganDarah: "",
     penyakitPernah: "",
-    asalSekolah: "",
     namaAyah: "",
     tempatLahirAyah: "",
     tanggalLahirAyah: undefined,
@@ -131,31 +129,8 @@ export default function PendaftaranPage() {
   }>({})
   const [showJuzField, setShowJuzField] = useState(false)
 
-  useEffect(() => {
-    // Load daftar biaya
-    const loadBiaya = async () => {
-      const { data, error } = await supabase
-        .from('biaya_pendaftaran')
-        .select('*')
-      
-      if (data) {
-        setBiayaList(data)
-        calculateTotalBiaya(formData.kelompokBelajar, data)
-      }
-    }
-
-    loadBiaya()
-  }, [])
-
-  useEffect(() => {
-    if (formData.kelompokBelajar === 'Al-Quran') {
-      setShowJuzField(true)
-    } else {
-      setShowJuzField(false)
-    }
-  }, [formData.kelompokBelajar])
-
-  const calculateTotalBiaya = (kelompokBelajar: string, biayaItems: BiayaItem[]) => {
+  // Memoize calculateTotalBiaya to prevent unnecessary re-renders
+  const calculateTotalBiaya = React.useCallback((kelompokBelajar: string, biayaItems: BiayaItem[]) => {
     let total = 0
     const isAlQuran = kelompokBelajar === 'Al-Quran'
 
@@ -173,7 +148,33 @@ export default function PendaftaranPage() {
     })
 
     setTotalBiaya(total)
-  }
+  }, []) // Empty dependency array since setTotalBiaya is stable
+
+  useEffect(() => {
+    // Load daftar biaya
+    const loadBiaya = async () => {
+      const { data, error } = await supabase
+        .from('biaya_pendaftaran')
+        .select('*')
+      
+      if (data) {
+        setBiayaList(data)
+        calculateTotalBiaya(formData.kelompokBelajar, data)
+      }
+    }
+
+    loadBiaya()
+  }, [formData.kelompokBelajar, calculateTotalBiaya])
+
+  useEffect(() => {
+    if (formData.kelompokBelajar === 'Al-Quran') {
+      setShowJuzField(true)
+    } else {
+      setShowJuzField(false)
+      // Reset juzAlquran when not in Al-Quran group
+      setFormData(prev => ({ ...prev, juzAlquran: undefined }))
+    }
+  }, [formData.kelompokBelajar])
 
   const handleFileUpload = (type: 'akte' | 'kk' | 'foto3x4' | 'foto2x4', file: File | undefined) => {
     if (!file) return
@@ -228,8 +229,7 @@ export default function PendaftaranPage() {
           formData.alamatRumah &&
           formData.anakKe &&
           formData.jumlahSaudara &&
-          formData.golonganDarah &&
-          formData.asalSekolah
+          formData.golonganDarah
         )
       case 1: // Biodata Orangtua
         return !!(
@@ -298,7 +298,6 @@ export default function PendaftaranPage() {
         jumlah_saudara: parseInt(formData.jumlahSaudara),
         golongan_darah: formData.golonganDarah || null,
         penyakit_pernah: formData.penyakitPernah || null,
-        asal_sekolah: formData.asalSekolah,
 
         // Biodata Ayah
         nama_ayah: formData.namaAyah,
@@ -397,7 +396,6 @@ export default function PendaftaranPage() {
       jumlahSaudara: "",
       golonganDarah: "",
       penyakitPernah: "",
-      asalSekolah: "",
       namaAyah: "",
       tempatLahirAyah: "",
       tanggalLahirAyah: undefined,
@@ -625,16 +623,6 @@ export default function PendaftaranPage() {
                       onChange={(e) => handleInputChange("alamatRumah", e.target.value)}
                       required
                       rows={3}
-                    />
-                  </div>
-                  <div className="md:col-span-2 space-y-2">
-                    <Label htmlFor="asalSekolah">Asal Sekolah/TK *</Label>
-                    <Input
-                      id="asalSekolah"
-                      value={formData.asalSekolah}
-                      onChange={(e) => handleInputChange("asalSekolah", e.target.value)}
-                      placeholder="Nama sekolah/TK sebelumnya"
-                      required
                     />
                   </div>
                   <div className="md:col-span-2 space-y-2">

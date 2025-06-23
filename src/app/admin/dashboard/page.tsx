@@ -1,3 +1,4 @@
+/* eslint-disable react-hooks/exhaustive-deps */
 "use client"
 
 import { useState, useEffect } from "react"
@@ -30,31 +31,6 @@ interface PendaftarData {
   tanggalLahir: string
   alamatRumah: string
   is_verified: boolean
-}
-
-interface PendaftarDetailData extends PendaftarData {
-  nama_panggilan: string
-  golongan_darah: string | null
-  penyakit_pernah: string | null
-  nama_ayah: string
-  tempat_lahir_ayah: string
-  tanggal_lahir_ayah: string
-  suku_ayah: string
-  pendidikan_ayah: string
-  pekerjaan_ayah: string
-  alamat_ayah: string
-  hp_ayah: string
-  nama_ibu: string
-  tempat_lahir_ibu: string
-  tanggal_lahir_ibu: string
-  suku_ibu: string
-  pendidikan_ibu: string
-  pekerjaan_ibu: string
-  alamat_ibu: string
-  hp_ibu: string
-  kelompok_belajar: string
-  tanggal_verifikasi: string | null
-  status_pembayaran: string
 }
 
 // Add this type definition after the interfaces
@@ -106,15 +82,24 @@ function AdminDashboard() {
   }
 
   useEffect(() => {
+    let mounted = true
+
     const init = async () => {
+      if (!mounted) return
       setIsLoading(true)
       const isAuthed = await checkAuth()
-      if (isAuthed) {
+      if (isAuthed && mounted) {
         await loadPendaftar()
       }
-      setIsLoading(false)
+      if (mounted) {
+        setIsLoading(false)
+      }
     }
     init()
+
+    return () => {
+      mounted = false
+    }
   }, [])
 
   const loadPendaftar = async () => {
@@ -455,7 +440,7 @@ function AdminDashboard() {
           <div className="flex justify-between items-center py-4">
             <div>
               <h1 className="text-2xl font-bold text-gray-900">Dashboard Admin</h1>
-              <p className="text-gray-600">TK/TP Al-Qur'an LPPTKA BKPRMI UNIT 004 Nur Islam</p>
+              <p className="text-gray-600">TK/TP Al-Quran LPPTKA BKPRMI UNIT 004 Nur Islam</p>
             </div>
             <div className="flex items-center space-x-4">
               <Button
@@ -567,7 +552,7 @@ function AdminDashboard() {
                         <input
                           type="checkbox"
                           checked={pendaftar.is_verified}
-                          onChange={() => handleStatusChange(pendaftar.id)}
+                          onChange={() => handleVerificationChange(pendaftar.id, pendaftar.is_verified)}
                           className="h-4 w-4 rounded border-gray-300 text-blue-600 focus:ring-blue-500"
                         />
                       </td>

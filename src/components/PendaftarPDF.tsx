@@ -1,9 +1,11 @@
+"use client"
+
 import { Document, Page, Text, View, StyleSheet, Image } from '@react-pdf/renderer'
 
 // Create styles
 const styles = StyleSheet.create({
   page: {
-    padding: 30,
+    padding: 40,
   },
   photoPage: {
     padding: 30,
@@ -13,26 +15,33 @@ const styles = StyleSheet.create({
     justifyContent: 'center',
   },
   section: {
-    marginBottom: 10,
+    marginBottom: 20,
   },
   title: {
-    fontSize: 18,
+    fontSize: 16,
     fontWeight: 'bold',
-    marginBottom: 20,
+    marginBottom: 10,
     textAlign: 'center',
   },
   subtitle: {
     fontSize: 14,
+    marginBottom: 20,
+    textAlign: 'center',
+  },
+  sectionTitle: {
+    fontSize: 14,
     fontWeight: 'bold',
     marginBottom: 10,
+    color: '#2563eb',
   },
   row: {
     flexDirection: 'row',
-    marginBottom: 5,
+    marginBottom: 8,
   },
   label: {
     width: '30%',
     fontSize: 12,
+    fontWeight: 'bold',
   },
   value: {
     width: '70%',
@@ -55,6 +64,15 @@ const styles = StyleSheet.create({
     fontWeight: 'bold',
     marginTop: 10,
     textAlign: 'center',
+  },
+  documentImage: {
+    width: '100%',
+    height: 200,
+    marginBottom: 20,
+  },
+  documentDescription: {
+    fontSize: 12,
+    marginBottom: 5,
   },
 })
 
@@ -280,52 +298,37 @@ const PendaftarPDF = ({ data }: PendaftarPDFProps) => (
       </View>
     </Page>
 
-    {/* Foto 3x4 Page */}
-    {data.foto3x4 && (
-      <Page size="A4" style={styles.photoPage}>
-        <View style={styles.photoContainer}>
-          <Image
-            src={data.foto3x4}
-            style={styles.photo}
-          />
-        </View>
-      </Page>
-    )}
-
-    {/* Foto 2x4 Page */}
-    {data.foto2x4 && (
-      <Page size="A4" style={styles.photoPage}>
-        <View style={styles.photoContainer}>
-          <Image
-            src={data.foto2x4}
-            style={styles.photo}
-          />
-        </View>
-      </Page>
-    )}
-
-    {/* Foto Kartu Keluarga Page */}
-    {data.fotoKk && (
-      <Page size="A4" style={styles.photoPage}>
-        <View style={styles.photoContainer}>
-          <Image
-            src={data.fotoKk}
-            style={styles.photo}
-          />
-        </View>
-      </Page>
-    )}
-
-    {/* Foto Akta Page */}
+    {/* Documents Section */}
     {data.fotoAkta && (
-      <Page size="A4" style={styles.photoPage}>
-        <View style={styles.photoContainer}>
-          <Image
-            src={data.fotoAkta}
-            style={styles.photo}
-          />
-        </View>
-      </Page>
+      <View style={styles.section}>
+        <Text style={styles.sectionTitle}>Foto Akta Kelahiran</Text>
+        <Text style={styles.documentDescription}>Dokumen Akta Kelahiran {data.namaLengkap}</Text>
+        <Image src={data.fotoAkta} style={styles.documentImage} />
+      </View>
+    )}
+
+    {data.fotoKk && (
+      <View style={styles.section}>
+        <Text style={styles.sectionTitle}>Foto Kartu Keluarga</Text>
+        <Text style={styles.documentDescription}>Dokumen Kartu Keluarga {data.namaLengkap}</Text>
+        <Image source={data.fotoKk} style={styles.documentImage} />
+      </View>
+    )}
+
+    {data.foto3x4 && (
+      <View style={styles.section}>
+        <Text style={styles.sectionTitle}>Foto 3x4</Text>
+        <Text style={styles.documentDescription}>Foto 3x4 Santri {data.namaLengkap}</Text>
+        <Image source={data.foto3x4} style={styles.documentImage} />
+      </View>
+    )}
+
+    {data.foto2x4 && (
+      <View style={styles.section}>
+        <Text style={styles.sectionTitle}>Foto 2x4</Text>
+        <Text style={styles.documentDescription}>Foto 2x4 Santri {data.namaLengkap}</Text>
+        <Image source={data.foto2x4} style={styles.documentImage} />
+      </View>
     )}
   </Document>
 )

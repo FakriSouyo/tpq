@@ -1,4 +1,5 @@
 /* eslint-disable @typescript-eslint/no-unused-vars */
+/* eslint-disable react-hooks/exhaustive-deps */
 "use client"
 
 import { useState, useEffect } from "react"
@@ -125,7 +126,6 @@ export default function DetailPendaftar() {
   const [pendaftar, setPendaftar] = useState<PendaftarData | null>(null)
   const [pembayaran, setPembayaran] = useState<PembayaranData | null>(null)
   const [isLoading, setIsLoading] = useState(true)
-  const [isDeleting, setIsDeleting] = useState(false)
   const [showPhoneDialog, setShowPhoneDialog] = useState(false)
   const [selectedPhone, setSelectedPhone] = useState<string>("")
   const [documentDialog, setDocumentDialog] = useState<{
@@ -169,18 +169,31 @@ export default function DetailPendaftar() {
   }
 
   useEffect(() => {
+    let mounted = true
+
     const init = async () => {
+      if (!mounted) return
       setIsLoading(true)
       const isAuthed = await checkAuth()
-      if (isAuthed) {
-        await Promise.all([
-          loadPendaftarDetail(),
-          loadPembayaranDetail()
-        ])
+      if (isAuthed && mounted) {
+        try {
+          await Promise.all([
+            loadPendaftarDetail(),
+            loadPembayaranDetail()
+          ])
+        } catch (error) {
+          console.error('Error loading data:', error)
+        }
       }
-      setIsLoading(false)
+      if (mounted) {
+        setIsLoading(false)
+      }
     }
     init()
+
+    return () => {
+      mounted = false
+    }
   }, [params.id])
 
   const loadPendaftarDetail = async () => {
@@ -240,8 +253,6 @@ export default function DetailPendaftar() {
       }
     } catch (error) {
       console.error('Error loading data:', error)
-    } finally {
-    setIsLoading(false)
     }
   }
 
@@ -271,108 +282,6 @@ export default function DetailPendaftar() {
       }
     } catch (error) {
       console.error('Error loading pembayaran:', error)
-    }
-  }
-
-  const handleDownloadPDF = () => {
-    if (!pendaftar) return
-
-    // Membuat konten PDF sederhana
-    const printContent = `
-      <html>
-        <head>
-          <title>Data Pendaftar - ${pendaftar.namaLengkap}</title>
-          <style>
-            body { font-family: Arial, sans-serif; margin: 20px; }
-            .header { text-align: center; margin-bottom: 30px; }
-            .section { margin-bottom: 20px; }
-            .section h3 { background: #f0f0f0; padding: 10px; margin: 0; }
-            .content { padding: 15px; border: 1px solid #ddd; }
-            .row { display: flex; margin-bottom: 10px; }
-            .label { font-weight: bold; width: 200px; }
-            .value { flex: 1; }
-            @media print { body { margin: 0; } }
-          </style>
-        </head>
-        <body>
-          <div class="header">
-            <h1>FORMULIR PENDAFTARAN SANTRI</h1>
-            <h2>TK/TP Al-Qur'an LPPTKA BKPRMI UNIT 004 Nur Islam</h2>
-          </div>
-          
-          <div class="section">
-            <h3>BIODATA SANTRI</h3>
-            <div class="content">
-              <div class="row"><div class="label">Nama Lengkap:</div><div class="value">${pendaftar.namaLengkap}</div></div>
-              <div class="row"><div class="label">Nama Panggilan:</div><div class="value">${pendaftar.namaPanggilan}</div></div>
-              <div class="row"><div class="label">Jenis Kelamin:</div><div class="value">${pendaftar.jenisKelamin}</div></div>
-              <div class="row"><div class="label">Tempat/Tgl Lahir:</div><div class="value">${pendaftar.tempatLahir}, ${new Date(pendaftar.tanggalLahir).toLocaleDateString("id-ID")}</div></div>
-              <div class="row"><div class="label">Alamat Rumah:</div><div class="value">${pendaftar.alamatRumah}</div></div>
-              <div class="row"><div class="label">Anak ke-:</div><div class="value">${pendaftar.anakKe}</div></div>
-              <div class="row"><div class="label">Jumlah Saudara:</div><div class="value">${pendaftar.jumlahSaudara}</div></div>
-              <div class="row"><div class="label">Golongan Darah:</div><div class="value">${pendaftar.golonganDarah || "-"}</div></div>
-              <div class="row"><div class="label">Penyakit Pernah Diderita:</div><div class="value">${pendaftar.penyakitPernah || "-"}</div></div>
-            </div>
-          </div>
-
-          <div class="section">
-            <h3>BIODATA AYAH</h3>
-            <div class="content">
-              <div class="row"><div class="label">Nama:</div><div class="value">${pendaftar.namaAyah}</div></div>
-              <div class="row"><div class="label">Tempat/Tgl Lahir:</div><div class="value">${pendaftar.tempatLahirAyah}, ${new Date(pendaftar.tanggalLahirAyah).toLocaleDateString("id-ID")}</div></div>
-              <div class="row"><div class="label">Suku:</div><div class="value">${pendaftar.sukuAyah}</div></div>
-              <div class="row"><div class="label">Pendidikan Terakhir:</div><div class="value">${pendaftar.pendidikanAyah}</div></div>
-              <div class="row"><div class="label">Pekerjaan:</div><div class="value">${pendaftar.pekerjaanAyah}</div></div>
-              <div class="row"><div class="label">Alamat Rumah:</div><div class="value">${pendaftar.alamatAyah}</div></div>
-              <div class="row"><div class="label">No. HP:</div><div class="value">${pendaftar.hpAyah}</div></div>
-            </div>
-          </div>
-
-          <div class="section">
-            <h3>BIODATA IBU</h3>
-            <div class="content">
-              <div class="row"><div class="label">Nama:</div><div class="value">${pendaftar.namaIbu}</div></div>
-              <div class="row"><div class="label">Tempat/Tgl Lahir:</div><div class="value">${pendaftar.tempatLahirIbu}, ${new Date(pendaftar.tanggalLahirIbu).toLocaleDateString("id-ID")}</div></div>
-              <div class="row"><div class="label">Suku:</div><div class="value">${pendaftar.sukuIbu}</div></div>
-              <div class="row"><div class="label">Pendidikan Terakhir:</div><div class="value">${pendaftar.pendidikanIbu}</div></div>
-              <div class="row"><div class="label">Pekerjaan:</div><div class="value">${pendaftar.pekerjaanIbu}</div></div>
-              <div class="row"><div class="label">Alamat Rumah:</div><div class="value">${pendaftar.alamatIbu}</div></div>
-              <div class="row"><div class="label">No. HP:</div><div class="value">${pendaftar.hpIbu}</div></div>
-            </div>
-          </div>
-
-          <div class="section">
-            <h3>ASAL SEKOLAH</h3>
-            <div class="content">
-              <div class="row"><div class="label">Masuk sebagai:</div><div class="value">${pendaftar.statusMasuk}</div></div>
-              ${
-                pendaftar.statusMasuk === "Santri Pindahan" && pendaftar.tanggalPindah
-                  ? `
-                <div class="row"><div class="label">Nama TPQ Sebelumnya:</div><div class="value">${pendaftar.namaTpqSebelum}</div></div>
-                <div class="row"><div class="label">Tanggal Pindah:</div><div class="value">${formatDate(pendaftar.tanggalPindah)}</div></div>
-              `
-                  : ""
-              }
-              <div class="row"><div class="label">Kelompok Belajar:</div><div class="value">${pendaftar.kelompokBelajar}</div></div>
-            </div>
-          </div>
-
-          <div class="section">
-            <h3>INFORMASI PENDAFTARAN</h3>
-            <div class="content">
-              <div class="row"><div class="label">Tanggal Daftar:</div><div class="value">${new Date(pendaftar.tanggalDaftar).toLocaleDateString("id-ID")}</div></div>
-              <div class="row"><div class="label">Status:</div><div class="value">${pendaftar.status}</div></div>
-            </div>
-          </div>
-        </body>
-      </html>
-    `
-
-    const printWindow = window.open("", "_blank")
-    if (printWindow) {
-      printWindow.document.write(printContent)
-      printWindow.document.close()
-      printWindow.print()
     }
   }
 
