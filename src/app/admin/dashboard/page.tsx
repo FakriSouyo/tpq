@@ -77,30 +77,45 @@ function AdminDashboard() {
   const [isDeleting, setIsDeleting] = useState(false)
   const router = useRouter()
 
-  useEffect(() => {
-    checkAuth()
-    loadPendaftar()
-  }, [router])
-
   const checkAuth = async () => {
-    const { data: { session } } = await supabase.auth.getSession()
-    if (!session) {
-      router.push("/admin")
-      return
-    }
+    try {
+      const { data: { session } } = await supabase.auth.getSession()
+      if (!session) {
+        router.push("/admin")
+        return false
+      }
 
-    // Verifikasi role admin
-    const { data: adminData, error: adminError } = await supabase
-      .from('admin_users')
-      .select('*')
-      .eq('user_id', session.user.id)
-      .single()
+      // Verifikasi role admin
+      const { data: adminData, error: adminError } = await supabase
+        .from('admin_users')
+        .select('*')
+        .eq('user_id', session.user.id)
+        .single()
 
-    if (adminError || !adminData) {
+      if (adminError || !adminData) {
+        router.push("/admin")
+        return false
+      }
+
+      return true
+    } catch (error) {
+      console.error('Auth check error:', error)
       router.push("/admin")
-      return
+      return false
     }
   }
+
+  useEffect(() => {
+    const init = async () => {
+      setIsLoading(true)
+      const isAuthed = await checkAuth()
+      if (isAuthed) {
+        await loadPendaftar()
+      }
+      setIsLoading(false)
+    }
+    init()
+  }, [])
 
   const loadPendaftar = async () => {
     try {
@@ -128,8 +143,11 @@ function AdminDashboard() {
       })))
     } catch (error) {
       console.error('Error loading data:', error)
-    } finally {
-      setIsLoading(false)
+      toast({
+        title: "Error",
+        description: "Gagal memuat data pendaftar",
+        variant: "destructive"
+      })
     }
   }
 

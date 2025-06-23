@@ -1,21 +1,29 @@
 "use client"
 
+/* eslint-disable @typescript-eslint/no-unused-vars */
 import * as React from "react"
+import { ToastAction } from "@/components/ui/toast"
 
-import type {
-  ToastActionElement,
-  ToastProps,
-} from "@/components/ui/toast"
+type ToastActionElement = React.ReactElement<typeof ToastAction>
 
-const TOAST_LIMIT = 1
-const TOAST_REMOVE_DELAY = 1000000
-
-type ToasterToast = ToastProps & {
-  id: string
+interface ToastProps {
+  id?: string
+  variant?: "default" | "destructive" | "success"
   title?: React.ReactNode
   description?: React.ReactNode
   action?: ToastActionElement
+  duration?: number
+  className?: string
+  open?: boolean
+  onOpenChange?: (open: boolean) => void
 }
+
+type Toast = ToastProps
+
+type ToasterToast = Required<Pick<Toast, "id">> & Toast
+
+const TOAST_LIMIT = 1
+const TOAST_REMOVE_DELAY = 1000000
 
 const actionTypes = {
   ADD_TOAST: "ADD_TOAST",
@@ -139,9 +147,7 @@ function dispatch(action: Action) {
   })
 }
 
-type Toast = Omit<ToasterToast, "id">
-
-function toast({ ...props }: Toast) {
+function toast({ ...props }: ToastProps) {
   const id = genId()
 
   const update = (props: ToasterToast) =>
@@ -191,4 +197,4 @@ function useToast() {
 }
 
 export { useToast, toast }
-export type { Toast } 
+export type { Toast, ToastActionElement } 

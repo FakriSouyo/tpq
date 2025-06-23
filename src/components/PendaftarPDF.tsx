@@ -284,7 +284,10 @@ const PendaftarPDF = ({ data }: PendaftarPDFProps) => (
     {data.foto3x4 && (
       <Page size="A4" style={styles.photoPage}>
         <View style={styles.photoContainer}>
-          <Image src={data.foto3x4} style={styles.photo} />
+          <Image
+            src={data.foto3x4}
+            style={styles.photo}
+          />
         </View>
       </Page>
     )}
@@ -293,7 +296,10 @@ const PendaftarPDF = ({ data }: PendaftarPDFProps) => (
     {data.foto2x4 && (
       <Page size="A4" style={styles.photoPage}>
         <View style={styles.photoContainer}>
-          <Image src={data.foto2x4} style={styles.photo} />
+          <Image
+            src={data.foto2x4}
+            style={styles.photo}
+          />
         </View>
       </Page>
     )}
@@ -302,7 +308,10 @@ const PendaftarPDF = ({ data }: PendaftarPDFProps) => (
     {data.fotoKk && (
       <Page size="A4" style={styles.photoPage}>
         <View style={styles.photoContainer}>
-          <Image src={data.fotoKk} style={styles.photo} />
+          <Image
+            src={data.fotoKk}
+            style={styles.photo}
+          />
         </View>
       </Page>
     )}
@@ -311,7 +320,10 @@ const PendaftarPDF = ({ data }: PendaftarPDFProps) => (
     {data.fotoAkta && (
       <Page size="A4" style={styles.photoPage}>
         <View style={styles.photoContainer}>
-          <Image src={data.fotoAkta} style={styles.photo} />
+          <Image
+            src={data.fotoAkta}
+            style={styles.photo}
+          />
         </View>
       </Page>
     )}

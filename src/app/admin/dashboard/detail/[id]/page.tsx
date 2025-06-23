@@ -1,3 +1,4 @@
+/* eslint-disable @typescript-eslint/no-unused-vars */
 "use client"
 
 import { useState, useEffect } from "react"
@@ -50,8 +51,13 @@ interface PendaftarData {
   alamatRumah: string
   anakKe: string
   jumlahSaudara: string
-  golonganDarah: string
-  penyakitPernah: string
+  golonganDarah: string | null
+  penyakitPernah: string | null
+  statusMasuk: string
+  namaTpqSebelum: string | null
+  tanggalPindah: string | null
+  kelompokBelajar: string
+  juz_alquran?: string | null
   namaAyah: string
   tempatLahirAyah: string
   tanggalLahirAyah: string
@@ -68,20 +74,14 @@ interface PendaftarData {
   pekerjaanIbu: string
   alamatIbu: string
   hpIbu: string
-  statusMasuk: string
-  namaTpqSebelum: string
-  tanggalPindah: string
-  kelompokBelajar: string
   tanggalDaftar: string
   status: string
   is_verified: boolean
-  tanggal_verifikasi: string
-  juz_alquran?: string
-  foto_santri?: string
-  foto_3x4?: string
-  foto_2x4?: string
-  foto_akte?: string
-  foto_kk?: string
+  tanggal_verifikasi: string | null
+  foto_akte: string | null
+  foto_kk: string | null
+  foto_3x4: string | null
+  foto_2x4: string | null
 }
 
 interface DocumentDialogProps {
@@ -140,31 +140,48 @@ export default function DetailPendaftar() {
   const router = useRouter()
   const params = useParams()
 
-  useEffect(() => {
-    checkAuth()
-    loadPendaftarDetail()
-    loadPembayaranDetail()
-  }, [params.id, router])
-
   const checkAuth = async () => {
-    const { data: { session } } = await supabase.auth.getSession()
-    if (!session) {
-      router.push("/admin")
-      return
-    }
+    try {
+      const { data: { session } } = await supabase.auth.getSession()
+      if (!session) {
+        router.push("/admin")
+        return false
+      }
 
-    // Verifikasi role admin
-    const { data: adminData, error: adminError } = await supabase
-      .from('admin_users')
-      .select('*')
-      .eq('user_id', session.user.id)
-      .single()
+      // Verifikasi role admin
+      const { data: adminData, error: adminError } = await supabase
+        .from('admin_users')
+        .select('*')
+        .eq('user_id', session.user.id)
+        .single()
 
-    if (adminError || !adminData) {
+      if (adminError || !adminData) {
+        router.push("/admin")
+        return false
+      }
+
+      return true
+    } catch (error) {
+      console.error('Auth check error:', error)
       router.push("/admin")
-      return
+      return false
     }
   }
+
+  useEffect(() => {
+    const init = async () => {
+      setIsLoading(true)
+      const isAuthed = await checkAuth()
+      if (isAuthed) {
+        await Promise.all([
+          loadPendaftarDetail(),
+          loadPembayaranDetail()
+        ])
+      }
+      setIsLoading(false)
+    }
+    init()
+  }, [params.id])
 
   const loadPendaftarDetail = async () => {
     try {
@@ -215,12 +232,10 @@ export default function DetailPendaftar() {
           status: data.status,
           is_verified: data.is_verified,
           tanggal_verifikasi: data.tanggal_verifikasi,
-          juz_alquran: data.juz_alquran,
-          foto_santri: data.foto_santri,
-          foto_3x4: data.foto_3x4,
-          foto_2x4: data.foto_2x4,
           foto_akte: data.foto_akte,
-          foto_kk: data.foto_kk
+          foto_kk: data.foto_kk,
+          foto_3x4: data.foto_3x4,
+          foto_2x4: data.foto_2x4
         })
       }
     } catch (error) {
@@ -331,10 +346,10 @@ export default function DetailPendaftar() {
             <div class="content">
               <div class="row"><div class="label">Masuk sebagai:</div><div class="value">${pendaftar.statusMasuk}</div></div>
               ${
-                pendaftar.statusMasuk === "Santri Pindahan"
+                pendaftar.statusMasuk === "Santri Pindahan" && pendaftar.tanggalPindah
                   ? `
                 <div class="row"><div class="label">Nama TPQ Sebelumnya:</div><div class="value">${pendaftar.namaTpqSebelum}</div></div>
-                <div class="row"><div class="label">Tanggal Pindah:</div><div class="value">${new Date(pendaftar.tanggalPindah).toLocaleDateString("id-ID")}</div></div>
+                <div class="row"><div class="label">Tanggal Pindah:</div><div class="value">${formatDate(pendaftar.tanggalPindah)}</div></div>
               `
                   : ""
               }
@@ -361,7 +376,8 @@ export default function DetailPendaftar() {
     }
   }
 
-  const formatDate = (dateString: string) => {
+  const formatDate = (dateString: string | null) => {
+    if (!dateString) return "-"
     return new Date(dateString).toLocaleDateString("id-ID", {
       day: "numeric",
       month: "long",
@@ -681,14 +697,14 @@ Wassalamu'alaikum Wr. Wb.`
                       tempatLahir: pendaftar.tempatLahir,
                       tanggalLahir: pendaftar.tanggalLahir,
                       alamatRumah: pendaftar.alamatRumah,
-                      anakKe: parseInt(pendaftar.anakKe, 10),
-                      jumlahSaudara: parseInt(pendaftar.jumlahSaudara, 10),
+                      anakKe: parseInt(pendaftar.anakKe),
+                      jumlahSaudara: parseInt(pendaftar.jumlahSaudara),
                       golonganDarah: pendaftar.golonganDarah,
                       penyakitPernah: pendaftar.penyakitPernah,
                       statusMasuk: pendaftar.statusMasuk,
                       namaTpqSebelum: pendaftar.namaTpqSebelum,
                       tanggalPindah: pendaftar.tanggalPindah,
-                      kelompokBelajar: pendaftar.kelompokBelajar || '',
+                      kelompokBelajar: pendaftar.kelompokBelajar,
                       namaAyah: pendaftar.namaAyah,
                       tempatLahirAyah: pendaftar.tempatLahirAyah,
                       tanggalLahirAyah: pendaftar.tanggalLahirAyah,
@@ -709,16 +725,16 @@ Wassalamu'alaikum Wr. Wb.`
                       status: pendaftar.status,
                       is_verified: pendaftar.is_verified,
                       tanggalVerifikasi: pendaftar.tanggal_verifikasi,
-                      fotoAkta: pendaftar.foto_akte || null,
-                      fotoKk: pendaftar.foto_kk || null,
-                      foto3x4: pendaftar.foto_3x4 || null,
-                      foto2x4: pendaftar.foto_2x4 || null
+                      fotoAkta: pendaftar.foto_akte,
+                      fotoKk: pendaftar.foto_kk,
+                      foto3x4: pendaftar.foto_3x4,
+                      foto2x4: pendaftar.foto_2x4
                     }}
                   />
                 }
                 fileName={`Data_Pendaftar_${pendaftar.namaLengkap}.pdf`}
               >
-                {({ blob, url, loading, error }) => (
+                {({ loading }) => (
                   <Button
                     className="flex items-center space-x-2"
                     disabled={loading}
@@ -993,8 +1009,8 @@ Wassalamu'alaikum Wr. Wb.`
                 <Button
                   variant="outline"
                   className="w-full flex items-center justify-center space-x-2"
-                  onClick={() => handleOpenDocument("Foto 3x4", pendaftar?.foto_3x4)}
-                  disabled={!pendaftar?.foto_3x4}
+                  onClick={() => handleOpenDocument("Foto 3x4", pendaftar.foto_3x4 || undefined)}
+                  disabled={!pendaftar.foto_3x4}
                 >
                   <FileText className="h-4 w-4" />
                   <span>Foto 3x4</span>
@@ -1003,8 +1019,8 @@ Wassalamu'alaikum Wr. Wb.`
                 <Button
                   variant="outline"
                   className="w-full flex items-center justify-center space-x-2"
-                  onClick={() => handleOpenDocument("Foto 2x4", pendaftar?.foto_2x4)}
-                  disabled={!pendaftar?.foto_2x4}
+                  onClick={() => handleOpenDocument("Foto 2x4", pendaftar.foto_2x4 || undefined)}
+                  disabled={!pendaftar.foto_2x4}
                 >
                   <FileText className="h-4 w-4" />
                   <span>Foto 2x4</span>
@@ -1013,8 +1029,8 @@ Wassalamu'alaikum Wr. Wb.`
                 <Button
                   variant="outline"
                   className="w-full flex items-center justify-center space-x-2"
-                  onClick={() => handleOpenDocument("Kartu Keluarga", pendaftar?.foto_kk)}
-                  disabled={!pendaftar?.foto_kk}
+                  onClick={() => handleOpenDocument("Kartu Keluarga", pendaftar.foto_kk || undefined)}
+                  disabled={!pendaftar.foto_kk}
                 >
                   <FileText className="h-4 w-4" />
                   <span>Kartu Keluarga</span>
@@ -1023,8 +1039,8 @@ Wassalamu'alaikum Wr. Wb.`
                 <Button
                   variant="outline"
                   className="w-full flex items-center justify-center space-x-2"
-                  onClick={() => handleOpenDocument("Akta Kelahiran", pendaftar?.foto_akte)}
-                  disabled={!pendaftar?.foto_akte}
+                  onClick={() => handleOpenDocument("Akta Kelahiran", pendaftar.foto_akte || undefined)}
+                  disabled={!pendaftar.foto_akte}
                 >
                   <FileText className="h-4 w-4" />
                   <span>Akta Kelahiran</span>
@@ -1038,7 +1054,7 @@ Wassalamu'alaikum Wr. Wb.`
                 <Alert className="bg-green-50 border-green-200">
                   <CheckCircle className="h-4 w-4 text-green-600" />
                   <AlertDescription className="text-green-700">
-                    Pendaftaran telah diverifikasi pada {formatDate(pendaftar.tanggal_verifikasi)}
+                    Pendaftaran telah diverifikasi {pendaftar.tanggal_verifikasi ? `pada ${formatDate(pendaftar.tanggal_verifikasi)}` : ''}
                   </AlertDescription>
                 </Alert>
                 <Button
@@ -1073,7 +1089,7 @@ Wassalamu'alaikum Wr. Wb.`
                       </TableRow>
                     </TableHeader>
                     <TableBody>
-                      {pembayaran?.biaya_items.map((item) => (
+                      {(pembayaran?.biaya_items || []).map((item) => (
                         <TableRow key={item.id}>
                           <TableCell>{item.nama_biaya}</TableCell>
                           <TableCell className="text-right">
@@ -1084,7 +1100,7 @@ Wassalamu'alaikum Wr. Wb.`
                       <TableRow key="total" className="font-bold">
                         <TableCell>Total</TableCell>
                         <TableCell className="text-right">
-                          Rp {pembayaran?.total_biaya.toLocaleString()}
+                          Rp {pembayaran?.total_biaya?.toLocaleString() || '0'}
                         </TableCell>
                       </TableRow>
                     </TableBody>
