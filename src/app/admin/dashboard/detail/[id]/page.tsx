@@ -9,6 +9,7 @@ import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
 import { Badge } from "@/components/ui/badge"
 import { ArrowLeft, Download, User, Users, GraduationCap, Phone, MapPin, Calendar, CheckCircle, FileText } from "lucide-react"
 import { supabase } from "@/lib/supabase"
+import { ThemeToggle } from "@/components/theme-toggle"
 import { Alert, AlertDescription } from "@/components/ui/alert"
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table"
 import { toast } from "@/components/ui/use-toast"
@@ -122,7 +123,7 @@ const DocumentDialog = ({ isOpen, onClose, title, url }: DocumentDialogProps) =>
   )
 }
 
-export default function DetailPendaftar() {
+function DetailPendaftar() {
   const [pendaftar, setPendaftar] = useState<PendaftarData | null>(null)
   const [pembayaran, setPembayaran] = useState<PembayaranData | null>(null)
   const [isLoading, setIsLoading] = useState(true)
@@ -172,7 +173,7 @@ export default function DetailPendaftar() {
     let mounted = true
 
     const init = async () => {
-      if (!mounted) return
+      if (!mounted || !params.id) return
       setIsLoading(true)
       const isAuthed = await checkAuth()
       if (isAuthed && mounted) {
@@ -198,6 +199,11 @@ export default function DetailPendaftar() {
 
   const loadPendaftarDetail = async () => {
     try {
+      if (!params.id) {
+        console.error('No ID provided')
+        return
+      }
+
       const { data, error } = await supabase
         .from('pendaftar_santri')
         .select('*')
@@ -258,11 +264,16 @@ export default function DetailPendaftar() {
 
   const loadPembayaranDetail = async () => {
     try {
+      if (!params.id) {
+        console.error('No ID provided for pembayaran')
+        return
+      }
+
       const { data, error } = await supabase
         .from('pembayaran')
         .select('*')
         .eq('pendaftar_id', params.id)
-        .single()
+        .maybeSingle()
 
       if (error) {
         console.error('Pembayaran error:', error)
@@ -279,9 +290,13 @@ export default function DetailPendaftar() {
           bukti_pembayaran: data.bukti_pembayaran,
           biaya_items: data.detail_biaya || []
         })
+      } else {
+        // Set pembayaran to null if no data found
+        setPembayaran(null)
       }
     } catch (error) {
       console.error('Error loading pembayaran:', error)
+      setPembayaran(null)
     }
   }
 
@@ -296,19 +311,16 @@ export default function DetailPendaftar() {
 
   const getStatusColor = (status: string) => {
     switch (status) {
-      case "Menunggu Verifikasi":
-        return "bg-yellow-100 text-yellow-800"
       case "Diterima":
-        return "bg-green-100 text-green-800"
-      case "Ditolak":
-        return "bg-red-100 text-red-800"
+        return "bg-foreground text-background"
       default:
-        return "bg-gray-100 text-gray-800"
+        return "bg-muted text-muted-foreground"
     }
   }
 
   const handleVerificationClick = () => {
-    setShowPhoneDialog(true)
+    // Direct verification without phone dialog since we have direct WhatsApp buttons now
+    handleVerificationStatusChange()
   }
 
   const formatWhatsAppLink = (phone: string, message: string) => {
@@ -352,7 +364,7 @@ export default function DetailPendaftar() {
       const { error: pembayaranError } = await supabase
         .from('pembayaran')
         .update({
-          status_pembayaran: 'Lunas'
+          status_pembayaran: 'Dikonfirmasi'
         })
         .eq('pendaftar_id', pendaftar?.id)
 
@@ -384,7 +396,7 @@ Bank BRI
 No. Rek: 123456789
 A.n: TPQ Nur Islam
 
-Mohon segera melakukan pembayaran dan mengirimkan bukti pembayaran melalui WhatsApp ke nomor Admin: 081234567890
+Mohon segera melakukan pembayaran dan mengirimkan bukti pembayaran melalui WhatsApp ke nomor Admin: 081227787685
 
 Wassalamu'alaikum Wr. Wb.`
 
@@ -446,7 +458,7 @@ Wassalamu'alaikum Wr. Wb.`
         const { error: pembayaranError } = await supabase
           .from('pembayaran')
           .update({
-            status_pembayaran: 'Lunas'
+            status_pembayaran: 'Dikonfirmasi'
           })
           .eq('pendaftar_id', pendaftar?.id)
 
@@ -477,24 +489,83 @@ Wassalamu'alaikum Wr. Wb.`
     try {
       if (!pendaftar?.id) return
 
-      const { error } = await supabase
-        .rpc('verify_and_update_payment', {
-          pendaftar_id_param: pendaftar.id
-        })
+      // Get current user for verification
+      const { data: { user } } = await supabase.auth.getUser()
+      if (!user) throw new Error('User not authenticated')
 
-      if (error) throw error
+      // Update pendaftar status
+      const { error: pendaftarError } = await supabase
+        .from('pendaftar_santri')
+        .update({
+          status: 'Diterima',
+          is_verified: true,
+          tanggal_verifikasi: new Date().toISOString(),
+          verifikasi_oleh: user.id
+        })
+        .eq('id', pendaftar.id)
+
+      if (pendaftarError) throw pendaftarError
+
+      // Check if pembayaran record exists
+      const { data: existingPembayaran } = await supabase
+        .from('pembayaran')
+        .select('id')
+        .eq('pendaftar_id', pendaftar.id)
+        .maybeSingle()
+
+      if (existingPembayaran) {
+        // Update existing pembayaran
+        const { error: pembayaranError } = await supabase
+          .from('pembayaran')
+          .update({
+            status_pembayaran: 'Dikonfirmasi',
+            updated_at: new Date().toISOString()
+          })
+          .eq('pendaftar_id', pendaftar.id)
+
+        if (pembayaranError) throw pembayaranError
+      } else {
+        // Create new pembayaran record - we need total_biaya and detail_biaya
+        // Get biaya data first
+        const { data: biayaData } = await supabase
+          .from('biaya_pendaftaran')
+          .select('*')
+          .order('nama_biaya')
+
+        const totalBiaya = biayaData?.reduce((sum, item) => sum + item.jumlah, 0) || 0
+
+        const { error: pembayaranError } = await supabase
+          .from('pembayaran')
+          .insert({
+            pendaftar_id: pendaftar.id,
+            total_biaya: totalBiaya,
+            detail_biaya: biayaData || [],
+            status_pembayaran: 'Dikonfirmasi',
+            created_at: new Date().toISOString(),
+            updated_at: new Date().toISOString()
+          })
+
+        if (pembayaranError) throw pembayaranError
+      }
 
       // Refresh data
       await loadPendaftarDetail()
       await loadPembayaranDetail()
 
       toast({
-        title: "Success",
-        description: "Status pendaftaran dan pembayaran berhasil diubah",
+        title: "Verifikasi Berhasil",
+        description: "Pendaftaran telah diverifikasi dan status pembayaran diperbarui",
         variant: "success"
       })
     } catch (error) {
       console.error('Error updating status:', error)
+      
+      // More detailed error logging
+      if (error instanceof Error) {
+        console.error('Error message:', error.message)
+        console.error('Error stack:', error.stack)
+      }
+      
       toast({
         title: "Error",
         description: error instanceof Error ? error.message : "Gagal mengubah status",
@@ -513,10 +584,10 @@ Wassalamu'alaikum Wr. Wb.`
 
   if (isLoading) {
     return (
-      <div className="min-h-screen bg-gray-50 flex items-center justify-center">
+      <div className="min-h-screen bg-gradient-to-br from-background via-background to-muted/20 flex items-center justify-center">
         <div className="text-center">
-          <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-blue-600 mx-auto"></div>
-          <p className="mt-4 text-gray-600">Memuat data...</p>
+          <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-foreground mx-auto"></div>
+          <p className="mt-4 text-muted-foreground">Memuat data...</p>
         </div>
       </div>
     )
@@ -524,13 +595,13 @@ Wassalamu'alaikum Wr. Wb.`
 
   if (!pendaftar) {
     return (
-      <div className="min-h-screen bg-gray-50 flex items-center justify-center">
-        <Card className="w-full max-w-md">
-          <CardContent className="pt-6 text-center">
-            <p className="text-gray-600 mb-4">Data pendaftar tidak ditemukan</p>
-            <Button onClick={() => router.push("/admin/dashboard")}>Kembali ke Dashboard</Button>
-          </CardContent>
-        </Card>
+      <div className="min-h-screen bg-gradient-to-br from-background via-background to-muted/20 flex items-center justify-center">
+        <div className="w-full max-w-md text-center space-y-4">
+          <p className="text-muted-foreground">Data pendaftar tidak ditemukan</p>
+          <Button onClick={() => router.push("/admin/dashboard")} variant="outline">
+            Kembali ke Dashboard
+          </Button>
+        </div>
       </div>
     )
   }
@@ -573,29 +644,35 @@ Wassalamu'alaikum Wr. Wb.`
   )
 
   return (
-    <div className="min-h-screen bg-gray-50">
+    <div className="min-h-screen bg-gradient-to-br from-background via-background to-muted/20">
       {phoneSelectionDialog}
       {/* Header */}
-      <div className="bg-white shadow-sm border-b">
+      <div className="border-b border-border/40 backdrop-blur-sm bg-background/80">
         <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
-          <div className="flex justify-between items-center py-4">
+          <div className="flex justify-between items-center py-6">
             <div className="flex items-center space-x-4">
               <Button
-                variant="outline"
+                variant="ghost"
                 size="sm"
                 onClick={() => router.push("/admin/dashboard")}
-                className="flex items-center space-x-2"
+                className="flex items-center space-x-2 text-muted-foreground hover:text-foreground"
               >
                 <ArrowLeft className="h-4 w-4" />
                 <span>Kembali</span>
               </Button>
-              <div>
-                <h1 className="text-2xl font-bold text-gray-900">Detail Pendaftar</h1>
-                <p className="text-gray-600">{pendaftar.namaLengkap}</p>
+              <div className="space-y-1">
+                <h1 className="text-2xl font-bold text-foreground">Detail Pendaftar</h1>
+                <p className="text-muted-foreground text-sm">{pendaftar.namaLengkap}</p>
               </div>
             </div>
-            <div className="flex items-center space-x-2">
-              <Badge className={getStatusColor(pendaftar.status)}>{pendaftar.status}</Badge>
+            <div className="flex items-center space-x-3">
+              <ThemeToggle />
+              <Badge 
+                variant={pendaftar.status === "Diterima" ? "default" : "secondary"}
+                className={pendaftar.status === "Diterima" ? "bg-foreground text-background" : ""}
+              >
+                {pendaftar.status}
+              </Badge>
               <PDFDownloadLink
                 document={
                   <PendaftarPDF
@@ -645,11 +722,13 @@ Wassalamu'alaikum Wr. Wb.`
               >
                 {({ loading }) => (
                   <Button
-                    className="flex items-center space-x-2"
+                    variant="ghost"
+                    size="sm"
                     disabled={loading}
+                    className="text-muted-foreground hover:text-foreground"
                   >
-                    <Download className="h-4 w-4" />
-                    <span>{loading ? 'Generating PDF...' : 'Unduh PDF'}</span>
+                    <Download className="h-4 w-4 mr-2" />
+                    <span>{loading ? 'PDF...' : 'PDF'}</span>
                   </Button>
                 )}
               </PDFDownloadLink>
@@ -662,58 +741,56 @@ Wassalamu'alaikum Wr. Wb.`
         <div className="grid grid-cols-1 lg:grid-cols-3 gap-8">
           {/* Biodata Santri */}
           <div className="lg:col-span-2 space-y-6">
-            <Card>
-              <CardHeader>
-                <CardTitle className="flex items-center space-x-2">
-                  <User className="h-5 w-5" />
-                  <span>Biodata Santri</span>
-                </CardTitle>
-              </CardHeader>
-              <CardContent className="space-y-4">
+            <div className="bg-background/60 backdrop-blur-sm border border-border/40 rounded-lg p-6">
+              <div className="flex items-center space-x-2 mb-6">
+                <User className="h-5 w-5 text-foreground" />
+                <h2 className="text-lg font-semibold text-foreground">Biodata Santri</h2>
+              </div>
+              <div className="space-y-4">
                 <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                   <div>
-                    <p className="text-sm font-medium text-gray-600">Nama Lengkap</p>
-                    <p className="text-lg font-semibold">{pendaftar.namaLengkap}</p>
+                    <p className="text-sm font-medium text-muted-foreground">Nama Lengkap</p>
+                    <p className="text-lg font-semibold text-foreground">{pendaftar.namaLengkap}</p>
                   </div>
                   <div>
-                    <p className="text-sm font-medium text-gray-600">Nama Panggilan</p>
-                    <p className="text-lg">{pendaftar.namaPanggilan}</p>
+                    <p className="text-sm font-medium text-muted-foreground">Nama Panggilan</p>
+                    <p className="text-lg text-foreground">{pendaftar.namaPanggilan}</p>
                   </div>
                   <div>
-                    <p className="text-sm font-medium text-gray-600">Jenis Kelamin</p>
-                    <p className="text-lg">{pendaftar.jenisKelamin}</p>
+                    <p className="text-sm font-medium text-muted-foreground">Jenis Kelamin</p>
+                    <p className="text-lg text-foreground">{pendaftar.jenisKelamin}</p>
                   </div>
                   <div>
-                    <p className="text-sm font-medium text-gray-600">Tempat/Tanggal Lahir</p>
-                    <p className="text-lg">
+                    <p className="text-sm font-medium text-muted-foreground">Tempat/Tanggal Lahir</p>
+                    <p className="text-lg text-foreground">
                       {pendaftar.tempatLahir}, {formatDate(pendaftar.tanggalLahir)}
                     </p>
                   </div>
                   <div>
-                    <p className="text-sm font-medium text-gray-600">Anak ke-</p>
-                    <p className="text-lg">{pendaftar.anakKe}</p>
+                    <p className="text-sm font-medium text-muted-foreground">Anak ke-</p>
+                    <p className="text-lg text-foreground">{pendaftar.anakKe}</p>
                   </div>
                   <div>
-                    <p className="text-sm font-medium text-gray-600">Jumlah Saudara</p>
-                    <p className="text-lg">{pendaftar.jumlahSaudara}</p>
+                    <p className="text-sm font-medium text-muted-foreground">Jumlah Saudara</p>
+                    <p className="text-lg text-foreground">{pendaftar.jumlahSaudara}</p>
                   </div>
                   <div>
-                    <p className="text-sm font-medium text-gray-600">Golongan Darah</p>
-                    <p className="text-lg">{pendaftar.golonganDarah || "-"}</p>
+                    <p className="text-sm font-medium text-muted-foreground">Golongan Darah</p>
+                    <p className="text-lg text-foreground">{pendaftar.golonganDarah || "-"}</p>
                   </div>
                 </div>
                 <div>
-                  <p className="text-sm font-medium text-gray-600">Alamat Rumah</p>
-                  <p className="text-lg">{pendaftar.alamatRumah}</p>
+                  <p className="text-sm font-medium text-muted-foreground">Alamat Rumah</p>
+                  <p className="text-lg text-foreground">{pendaftar.alamatRumah}</p>
                 </div>
                 {pendaftar.penyakitPernah && (
                   <div>
-                    <p className="text-sm font-medium text-gray-600">Penyakit yang Pernah Diderita</p>
-                    <p className="text-lg">{pendaftar.penyakitPernah}</p>
+                    <p className="text-sm font-medium text-muted-foreground">Penyakit yang Pernah Diderita</p>
+                    <p className="text-lg text-foreground">{pendaftar.penyakitPernah}</p>
                   </div>
                 )}
-              </CardContent>
-            </Card>
+              </div>
+            </div>
 
             {/* Biodata Orangtua */}
             <Card>
@@ -726,87 +803,87 @@ Wassalamu'alaikum Wr. Wb.`
               <CardContent className="space-y-6">
                 {/* Data Ayah */}
                 <div>
-                  <h3 className="text-lg font-semibold text-blue-700 mb-4">Data Ayah</h3>
+                  <h3 className="text-lg font-semibold text-foreground mb-4">Data Ayah</h3>
                   <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                     <div>
-                      <p className="text-sm font-medium text-gray-600">Nama Lengkap</p>
-                      <p className="text-lg">{pendaftar.namaAyah}</p>
+                      <p className="text-sm font-medium text-muted-foreground">Nama Lengkap</p>
+                      <p className="text-lg text-foreground">{pendaftar.namaAyah}</p>
                     </div>
                     <div>
-                      <p className="text-sm font-medium text-gray-600">Tempat/Tanggal Lahir</p>
-                      <p className="text-lg">
+                      <p className="text-sm font-medium text-muted-foreground">Tempat/Tanggal Lahir</p>
+                      <p className="text-lg text-foreground">
                         {pendaftar.tempatLahirAyah}, {formatDate(pendaftar.tanggalLahirAyah)}
                       </p>
                     </div>
                     <div>
-                      <p className="text-sm font-medium text-gray-600">Suku</p>
-                      <p className="text-lg">{pendaftar.sukuAyah}</p>
+                      <p className="text-sm font-medium text-muted-foreground">Suku</p>
+                      <p className="text-lg text-foreground">{pendaftar.sukuAyah}</p>
                     </div>
                     <div>
-                      <p className="text-sm font-medium text-gray-600">Pendidikan Terakhir</p>
-                      <p className="text-lg">{pendaftar.pendidikanAyah}</p>
+                      <p className="text-sm font-medium text-muted-foreground">Pendidikan Terakhir</p>
+                      <p className="text-lg text-foreground">{pendaftar.pendidikanAyah}</p>
                     </div>
                     <div>
-                      <p className="text-sm font-medium text-gray-600">Pekerjaan</p>
-                      <p className="text-lg">{pendaftar.pekerjaanAyah}</p>
+                      <p className="text-sm font-medium text-muted-foreground">Pekerjaan</p>
+                      <p className="text-lg text-foreground">{pendaftar.pekerjaanAyah}</p>
                     </div>
                     <div>
-                      <p className="text-sm font-medium text-gray-600 flex items-center space-x-1">
+                      <p className="text-sm font-medium text-muted-foreground flex items-center space-x-1">
                         <Phone className="h-4 w-4" />
                         <span>No. HP</span>
                       </p>
-                      <p className="text-lg">{pendaftar.hpAyah}</p>
+                      <p className="text-lg text-foreground">{pendaftar.hpAyah}</p>
                     </div>
                   </div>
                   <div className="mt-4">
-                    <p className="text-sm font-medium text-gray-600 flex items-center space-x-1">
+                    <p className="text-sm font-medium text-muted-foreground flex items-center space-x-1">
                       <MapPin className="h-4 w-4" />
                       <span>Alamat Rumah</span>
                     </p>
-                    <p className="text-lg">{pendaftar.alamatAyah}</p>
+                    <p className="text-lg text-foreground">{pendaftar.alamatAyah}</p>
                   </div>
                 </div>
 
                 {/* Data Ibu */}
                 <div>
-                  <h3 className="text-lg font-semibold text-pink-700 mb-4">Data Ibu</h3>
+                  <h3 className="text-lg font-semibold text-foreground mb-4">Data Ibu</h3>
                   <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                     <div>
-                      <p className="text-sm font-medium text-gray-600">Nama Lengkap</p>
-                      <p className="text-lg">{pendaftar.namaIbu}</p>
+                      <p className="text-sm font-medium text-muted-foreground">Nama Lengkap</p>
+                      <p className="text-lg text-foreground">{pendaftar.namaIbu}</p>
                     </div>
                     <div>
-                      <p className="text-sm font-medium text-gray-600">Tempat/Tanggal Lahir</p>
-                      <p className="text-lg">
+                      <p className="text-sm font-medium text-muted-foreground">Tempat/Tanggal Lahir</p>
+                      <p className="text-lg text-foreground">
                         {pendaftar.tempatLahirIbu}, {formatDate(pendaftar.tanggalLahirIbu)}
                       </p>
                     </div>
                     <div>
-                      <p className="text-sm font-medium text-gray-600">Suku</p>
-                      <p className="text-lg">{pendaftar.sukuIbu}</p>
+                      <p className="text-sm font-medium text-muted-foreground">Suku</p>
+                      <p className="text-lg text-foreground">{pendaftar.sukuIbu}</p>
                     </div>
                     <div>
-                      <p className="text-sm font-medium text-gray-600">Pendidikan Terakhir</p>
-                      <p className="text-lg">{pendaftar.pendidikanIbu}</p>
+                      <p className="text-sm font-medium text-muted-foreground">Pendidikan Terakhir</p>
+                      <p className="text-lg text-foreground">{pendaftar.pendidikanIbu}</p>
                     </div>
                     <div>
-                      <p className="text-sm font-medium text-gray-600">Pekerjaan</p>
-                      <p className="text-lg">{pendaftar.pekerjaanIbu}</p>
+                      <p className="text-sm font-medium text-muted-foreground">Pekerjaan</p>
+                      <p className="text-lg text-foreground">{pendaftar.pekerjaanIbu}</p>
                     </div>
                     <div>
-                      <p className="text-sm font-medium text-gray-600 flex items-center space-x-1">
+                      <p className="text-sm font-medium text-muted-foreground flex items-center space-x-1">
                         <Phone className="h-4 w-4" />
                         <span>No. HP</span>
                       </p>
-                      <p className="text-lg">{pendaftar.hpIbu}</p>
+                      <p className="text-lg text-foreground">{pendaftar.hpIbu}</p>
                     </div>
                   </div>
                   <div className="mt-4">
-                    <p className="text-sm font-medium text-gray-600 flex items-center space-x-1">
+                    <p className="text-sm font-medium text-muted-foreground flex items-center space-x-1">
                       <MapPin className="h-4 w-4" />
                       <span>Alamat Rumah</span>
                     </p>
-                    <p className="text-lg">{pendaftar.alamatIbu}</p>
+                    <p className="text-lg text-foreground">{pendaftar.alamatIbu}</p>
                   </div>
                 </div>
               </CardContent>
@@ -822,24 +899,24 @@ Wassalamu'alaikum Wr. Wb.`
               </CardHeader>
               <CardContent className="space-y-4">
                 <div>
-                  <p className="text-sm font-medium text-gray-600">Masuk sebagai</p>
-                  <p className="text-lg font-semibold">{pendaftar.statusMasuk}</p>
+                  <p className="text-sm font-medium text-muted-foreground">Masuk sebagai</p>
+                  <p className="text-lg font-semibold text-foreground">{pendaftar.statusMasuk}</p>
                 </div>
                 {pendaftar.statusMasuk === "Santri Pindahan" && (
                   <>
                     <div>
-                      <p className="text-sm font-medium text-gray-600">Nama TPQ Sebelumnya</p>
-                      <p className="text-lg">{pendaftar.namaTpqSebelum}</p>
+                      <p className="text-sm font-medium text-muted-foreground">Nama TPQ Sebelumnya</p>
+                      <p className="text-lg text-foreground">{pendaftar.namaTpqSebelum}</p>
                     </div>
                     <div>
-                      <p className="text-sm font-medium text-gray-600">Tanggal Pindah</p>
-                      <p className="text-lg">{formatDate(pendaftar.tanggalPindah)}</p>
+                      <p className="text-sm font-medium text-muted-foreground">Tanggal Pindah</p>
+                      <p className="text-lg text-foreground">{formatDate(pendaftar.tanggalPindah)}</p>
                     </div>
                   </>
                 )}
                 <div>
-                  <p className="text-sm font-medium text-gray-600">Kelompok Belajar</p>
-                  <p className="text-lg font-semibold text-green-700">{pendaftar.kelompokBelajar}</p>
+                  <p className="text-sm font-medium text-muted-foreground">Kelompok Belajar</p>
+                  <p className="text-lg font-semibold text-foreground">{pendaftar.kelompokBelajar}</p>
                 </div>
               </CardContent>
             </Card>
@@ -856,11 +933,11 @@ Wassalamu'alaikum Wr. Wb.`
               </CardHeader>
               <CardContent className="space-y-4">
                 <div>
-                  <p className="text-sm font-medium text-gray-600">Tanggal Daftar</p>
-                  <p className="text-lg font-semibold">{formatDate(pendaftar.tanggalDaftar)}</p>
+                  <p className="text-sm font-medium text-muted-foreground">Tanggal Daftar</p>
+                  <p className="text-lg font-semibold text-foreground">{formatDate(pendaftar.tanggalDaftar)}</p>
                 </div>
                 <div>
-                  <p className="text-sm font-medium text-gray-600">Status Pendaftaran</p>
+                  <p className="text-sm font-medium text-muted-foreground">Status Pendaftaran</p>
                   <div className="flex items-center space-x-2 mt-1">
                     <Badge className={`${getStatusColor(pendaftar.status)} text-sm px-3 py-1`}>
                       {pendaftar.status}
@@ -868,43 +945,112 @@ Wassalamu'alaikum Wr. Wb.`
                     {pendaftar.status !== 'Diterima' && (
                       <Button
                         size="sm"
+                        variant="outline"
                         onClick={handleStatusChange}
-                        className="bg-green-600 hover:bg-green-700"
+                        className="border-foreground/20 hover:bg-foreground hover:text-background"
                       >
                         <CheckCircle className="h-4 w-4 mr-1" />
-                        Terima & Lunasi
+                        Terima & Konfirmasi
                       </Button>
                     )}
                   </div>
                 </div>
                 <div>
-                  <p className="text-sm font-medium text-gray-600">ID Pendaftar</p>
-                  <p className="text-sm text-gray-500 font-mono">{pendaftar.id}</p>
+                  <p className="text-sm font-medium text-muted-foreground">ID Pendaftar</p>
+                  <p className="text-sm text-muted-foreground font-mono">{pendaftar.id}</p>
                 </div>
               </CardContent>
             </Card>
 
-            <Card>
-              <CardHeader>
-                <CardTitle>Kontak Orang tua</CardTitle>
-              </CardHeader>
-              <CardContent className="space-y-3">
-                <div className="flex items-center space-x-3 p-3 bg-blue-50 rounded-lg">
-                  <Phone className="h-5 w-5 text-blue-600" />
+            <div className="bg-background/60 backdrop-blur-sm border border-border/40 rounded-lg p-6">
+              <h2 className="text-lg font-semibold text-foreground mb-4">Kontak Orang tua</h2>
+              <div className="space-y-3">
+                <button
+                  onClick={() => {
+                    const message = `Assalamu'alaikum Wr. Wb.
+
+Terima kasih telah mendaftarkan putra/putri Anda di TPQ Nur Islam Tarakan.
+
+Detail Pendaftaran:
+Nama Santri: ${pendaftar?.namaLengkap}
+Kelompok Belajar: ${pendaftar?.kelompokBelajar}
+${pendaftar?.kelompokBelajar === 'Al-Quran' ? `Juz: ${pendaftar?.juz_alquran}` : ''}
+
+${pembayaran?.total_biaya ? `Total Biaya: Rp ${pembayaran.total_biaya.toLocaleString()}` : ''}
+
+Silakan melakukan pembayaran ke rekening:
+Bank BRI
+No. Rek: 123456789
+A.n: TPQ Nur Islam Tarakan
+
+Lokasi: Jl. Mulawarman No. 45, Tarakan Timur, Kota Tarakan, Kalimantan Utara
+
+Mohon segera melakukan pembayaran dan mengirimkan bukti pembayaran melalui WhatsApp ke nomor Admin: 081227787685
+
+Jam Belajar:
+- Senin-Kamis: 14.00-17.00 WITA  
+- Jumat: 15.00-17.00 WITA
+- Sabtu-Minggu: Libur
+
+Wassalamu'alaikum Wr. Wb.`
+                    
+                    const formattedPhone = pendaftar.hpAyah.replace(/\D/g, "").replace(/^0|^8/, "62")
+                    const encodedMessage = encodeURIComponent(message)
+                    const whatsappLink = `https://wa.me/${formattedPhone}?text=${encodedMessage}`
+                    window.open(whatsappLink, '_blank')
+                  }}
+                  className="w-full flex items-center space-x-3 p-3 bg-muted/20 hover:bg-muted/40 rounded-lg transition-colors text-left"
+                >
+                  <Phone className="h-5 w-5 text-foreground" />
                   <div>
-                    <p className="text-sm font-medium text-blue-800">Ayah</p>
-                    <p className="text-sm text-blue-600">{pendaftar.hpAyah}</p>
+                    <p className="text-sm font-medium text-foreground">Ayah - {pendaftar.namaAyah}</p>
+                    <p className="text-sm text-muted-foreground">{pendaftar.hpAyah}</p>
                   </div>
-                </div>
-                <div className="flex items-center space-x-3 p-3 bg-pink-50 rounded-lg">
-                  <Phone className="h-5 w-5 text-pink-600" />
+                </button>
+                <button
+                  onClick={() => {
+                    const message = `Assalamu'alaikum Wr. Wb.
+
+Terima kasih telah mendaftarkan putra/putri Anda di TPQ Nur Islam Tarakan.
+
+Detail Pendaftaran:
+Nama Santri: ${pendaftar?.namaLengkap}
+Kelompok Belajar: ${pendaftar?.kelompokBelajar}
+${pendaftar?.kelompokBelajar === 'Al-Quran' ? `Juz: ${pendaftar?.juz_alquran}` : ''}
+
+${pembayaran?.total_biaya ? `Total Biaya: Rp ${pembayaran.total_biaya.toLocaleString()}` : ''}
+
+Silakan melakukan pembayaran ke rekening:
+Bank BRI
+No. Rek: 123456789
+A.n: TPQ Nur Islam Tarakan
+
+Lokasi: Jl. Mulawarman No. 45, Tarakan Timur, Kota Tarakan, Kalimantan Utara
+
+Mohon segera melakukan pembayaran dan mengirimkan bukti pembayaran melalui WhatsApp ke nomor Admin: 081227787685
+
+Jam Belajar:
+- Senin-Kamis: 14.00-17.00 WITA  
+- Jumat: 15.00-17.00 WITA
+- Sabtu-Minggu: Libur
+
+Wassalamu'alaikum Wr. Wb.`
+                    
+                    const formattedPhone = pendaftar.hpIbu.replace(/\D/g, "").replace(/^0|^8/, "62")
+                    const encodedMessage = encodeURIComponent(message)
+                    const whatsappLink = `https://wa.me/${formattedPhone}?text=${encodedMessage}`
+                    window.open(whatsappLink, '_blank')
+                  }}
+                  className="w-full flex items-center space-x-3 p-3 bg-muted/20 hover:bg-muted/40 rounded-lg transition-colors text-left"
+                >
+                  <Phone className="h-5 w-5 text-foreground" />
                   <div>
-                    <p className="text-sm font-medium text-pink-800">Ibu</p>
-                    <p className="text-sm text-pink-600">{pendaftar.hpIbu}</p>
+                    <p className="text-sm font-medium text-foreground">Ibu - {pendaftar.namaIbu}</p>
+                    <p className="text-sm text-muted-foreground">{pendaftar.hpIbu}</p>
                   </div>
-                </div>
-              </CardContent>
-            </Card>
+                </button>
+              </div>
+            </div>
 
             {/* Replace the photo viewing section with buttons */}
             <Card>
@@ -960,15 +1106,18 @@ Wassalamu'alaikum Wr. Wb.`
             {/* Modify verification button section */}
             {pendaftar?.is_verified ? (
               <div className="space-y-4">
-                <Alert className="bg-green-50 border-green-200">
-                  <CheckCircle className="h-4 w-4 text-green-600" />
-                  <AlertDescription className="text-green-700">
-                    Pendaftaran telah diverifikasi {pendaftar.tanggal_verifikasi ? `pada ${formatDate(pendaftar.tanggal_verifikasi)}` : ''}
-                  </AlertDescription>
-                </Alert>
+                <div className="bg-background/60 backdrop-blur-sm border border-border/40 rounded-lg p-4">
+                  <div className="flex items-center space-x-2">
+                    <CheckCircle className="h-4 w-4 text-foreground" />
+                    <p className="text-sm text-foreground">
+                      Pendaftaran telah diverifikasi {pendaftar.tanggal_verifikasi ? `pada ${formatDate(pendaftar.tanggal_verifikasi)}` : ''}
+                    </p>
+                  </div>
+                </div>
                 <Button
                   onClick={handleVerificationStatusChange}
-                  className="w-full bg-red-600 hover:bg-red-700"
+                  variant="outline"
+                  className="w-full border-foreground/20 hover:bg-foreground hover:text-background"
                 >
                   Batalkan Verifikasi
                 </Button>
@@ -976,7 +1125,8 @@ Wassalamu'alaikum Wr. Wb.`
             ) : (
               <Button
                 onClick={handleVerificationClick}
-                className="w-full bg-green-600 hover:bg-green-700"
+                variant="outline"
+                className="w-full border-foreground/20 hover:bg-foreground hover:text-background"
                 disabled={pendaftar.status === 'Diterima'}
               >
                 {pendaftar.status === 'Diterima' ? 'Sudah Diverifikasi' : 'Verifikasi Pendaftaran'}
@@ -1019,7 +1169,7 @@ Wassalamu'alaikum Wr. Wb.`
                     <div>
                       <p className="text-sm font-medium">Status Pembayaran:</p>
                       <Badge
-                        variant={pembayaran?.status_pembayaran === 'Lunas' ? 'success' : 'warning'}
+                        variant={pembayaran?.status_pembayaran === 'Dikonfirmasi' ? 'success' : 'warning'}
                       >
                         {pembayaran?.status_pembayaran || 'Belum Bayar'}
                       </Badge>
@@ -1062,3 +1212,5 @@ Wassalamu'alaikum Wr. Wb.`
     </div>
   )
 }
+
+export default DetailPendaftar

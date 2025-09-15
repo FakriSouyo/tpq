@@ -303,6 +303,7 @@ const PendaftarPDF = ({ data }: PendaftarPDFProps) => (
       <View style={styles.section}>
         <Text style={styles.sectionTitle}>Foto Akta Kelahiran</Text>
         <Text style={styles.documentDescription}>Dokumen Akta Kelahiran {data.namaLengkap}</Text>
+        {/* eslint-disable-next-line jsx-a11y/alt-text */}
         <Image src={data.fotoAkta} style={styles.documentImage} />
       </View>
     )}
@@ -311,6 +312,7 @@ const PendaftarPDF = ({ data }: PendaftarPDFProps) => (
       <View style={styles.section}>
         <Text style={styles.sectionTitle}>Foto Kartu Keluarga</Text>
         <Text style={styles.documentDescription}>Dokumen Kartu Keluarga {data.namaLengkap}</Text>
+        {/* eslint-disable-next-line jsx-a11y/alt-text */}
         <Image source={data.fotoKk} style={styles.documentImage} />
       </View>
     )}
@@ -319,6 +321,7 @@ const PendaftarPDF = ({ data }: PendaftarPDFProps) => (
       <View style={styles.section}>
         <Text style={styles.sectionTitle}>Foto 3x4</Text>
         <Text style={styles.documentDescription}>Foto 3x4 Santri {data.namaLengkap}</Text>
+        {/* eslint-disable-next-line jsx-a11y/alt-text */}
         <Image source={data.foto3x4} style={styles.documentImage} />
       </View>
     )}
@@ -327,6 +330,7 @@ const PendaftarPDF = ({ data }: PendaftarPDFProps) => (
       <View style={styles.section}>
         <Text style={styles.sectionTitle}>Foto 2x4</Text>
         <Text style={styles.documentDescription}>Foto 2x4 Santri {data.namaLengkap}</Text>
+        {/* eslint-disable-next-line jsx-a11y/alt-text */}
         <Image source={data.foto2x4} style={styles.documentImage} />
       </View>
     )}

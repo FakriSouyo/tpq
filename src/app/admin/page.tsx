@@ -7,10 +7,9 @@ import { useRouter } from "next/navigation"
 import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
 import { Label } from "@/components/ui/label"
-import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
-import { Alert, AlertDescription } from "@/components/ui/alert"
 import { Lock } from "lucide-react"
 import { supabase } from "@/lib/supabase"
+import { ThemeToggle } from "@/components/theme-toggle"
 
 export default function AdminLoginPage() {
   const [email, setEmail] = useState("")
@@ -40,10 +39,16 @@ export default function AdminLoginPage() {
           .from('admin_users')
           .select('*')
           .eq('user_id', data.user.id)
-          .single()
 
-        if (adminError || !adminData) {
-          throw new Error('Akses tidak diizinkan')
+        console.log('Admin check:', { adminData, adminError, userId: data.user.id })
+
+        if (adminError) {
+          console.error('Admin error:', adminError)
+          throw new Error(`Database error: ${adminError.message}`)
+        }
+
+        if (!adminData || adminData.length === 0) {
+          throw new Error('Akses tidak diizinkan. User bukan admin.')
         }
 
         localStorage.setItem("adminLoggedIn", "true")
@@ -58,50 +63,79 @@ export default function AdminLoginPage() {
   }
 
   return (
-    <div className="min-h-screen bg-gradient-to-br from-blue-50 to-indigo-100 flex items-center justify-center p-4">
-      <Card className="w-full max-w-md">
-        <CardHeader className="text-center">
-          <div className="mx-auto bg-blue-600 w-12 h-12 rounded-full flex items-center justify-center mb-4">
-            <Lock className="h-6 w-6 text-white" />
-          </div>
-          <CardTitle className="text-2xl font-bold text-gray-800">Login Admin</CardTitle>
-          <p className="text-gray-600">Masuk ke panel administrasi</p>
-        </CardHeader>
-        <CardContent>
-          <form onSubmit={handleLogin} className="space-y-4">
-            <div className="space-y-2">
-              <Label htmlFor="email">Email</Label>
-              <Input
-                id="email"
-                type="email"
-                value={email}
-                onChange={(e) => setEmail(e.target.value)}
-                required
-              />
+    <div className="min-h-screen bg-gradient-to-br from-background via-background to-muted/20 flex items-center justify-center p-6">
+      <div className="w-full max-w-sm">
+        {/* Theme Toggle */}
+        <div className="flex justify-end mb-6">
+          <ThemeToggle />
+        </div>
+
+        {/* Login Form */}
+        <div className="space-y-8">
+          {/* Header */}
+          <div className="text-center space-y-4">
+            <div className="w-16 h-16 mx-auto bg-foreground rounded-full flex items-center justify-center">
+              <Lock className="h-8 w-8 text-background" />
             </div>
-            <div className="space-y-2">
-              <Label htmlFor="password">Password</Label>
-              <Input
-                id="password"
-                type="password"
-                value={password}
-                onChange={(e) => setPassword(e.target.value)}
-                required
-              />
+            <div>
+              <h1 className="text-2xl font-bold text-foreground">Admin Login</h1>
+              <p className="text-muted-foreground text-sm mt-1">Masuk ke panel administrasi</p>
+            </div>
+          </div>
+
+          {/* Form */}
+          <form onSubmit={handleLogin} className="space-y-6">
+            <div className="space-y-4">
+              <div className="space-y-2">
+                <Label htmlFor="email" className="text-sm font-medium">Email</Label>
+                <Input
+                  id="email"
+                  type="email"
+                  value={email}
+                  onChange={(e) => setEmail(e.target.value)}
+                  placeholder="admin@tpqnurislam.com"
+                  className="h-12"
+                  required
+                />
+              </div>
+              
+              <div className="space-y-2">
+                <Label htmlFor="password" className="text-sm font-medium">Password</Label>
+                <Input
+                  id="password"
+                  type="password"
+                  value={password}
+                  onChange={(e) => setPassword(e.target.value)}
+                  placeholder="••••••••"
+                  className="h-12"
+                  required
+                />
+              </div>
             </div>
 
             {error && (
-              <Alert variant="destructive">
-                <AlertDescription>{error}</AlertDescription>
-              </Alert>
+              <div className="bg-destructive/10 border border-destructive/20 rounded-lg p-3">
+                <p className="text-destructive text-sm">{error}</p>
+              </div>
             )}
 
-            <Button type="submit" className="w-full" disabled={isLoading}>
+            <Button 
+              type="submit" 
+              className="w-full h-12 bg-foreground text-background hover:bg-foreground/90" 
+              disabled={isLoading}
+            >
               {isLoading ? "Memproses..." : "Masuk"}
             </Button>
           </form>
-        </CardContent>
-      </Card>
+
+          {/* Footer */}
+          <div className="text-center">
+            <p className="text-xs text-muted-foreground">
+              TPQ Nur Islam Tarakan • Admin Panel
+            </p>
+          </div>
+        </div>
+      </div>
     </div>
   )
 }
